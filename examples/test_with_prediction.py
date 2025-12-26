@@ -334,26 +334,40 @@ while cap.isOpened():  # While video is open
             actual_velocity = velocity_tracker.get_actual_velocity(track_id)
             # Get the ego-compensated velocity (ground-relative)
             
+            # Calculate speed magnitude
+            actual_speed = np.linalg.norm(actual_velocity)  # Speed in pixels/frame
+            
             # -------------------------------------------------------------
             # BEV velocity calculation (convert to real-world speed)
             # -------------------------------------------------------------
-            # Only calculate if BEV enabled and object is moving
-            if ENABLE_BEV_CALCULATION and np.linalg.norm(actual_velocity) > 0.5:
+            # Only calculate if BEV enabled and object is moving significantly
+            # Add threshold to avoid noise from stationary objects
+            if ENABLE_BEV_CALCULATION and actual_speed > 1.0:  # Increased threshold from 0.5 to 1.0
                 # np.linalg.norm() gets velocity magnitude (speed)
-                # > 0.5 means only process if speed > 0.5 pixels/frame
+                # > 1.0 means only process if speed > 1.0 pixels/frame
                 
-                # Transform velocity from image space to BEV space
-                bev_velocity = bev_integrator.image_velocity_to_bev(
-                    actual_velocity,  # Velocity in image coordinates
-                    position           # Current position (needed for transformation)
-                )
-                
-                # Convert BEV velocity to metric units (m/s)
-                velocity_ms = bev_integrator.bev_velocity_to_metric(bev_velocity)
-                
-                # Convert m/s to km/h
-                speed_kmh = bev_integrator.get_speed_kmh(velocity_ms)
-            else:  # BEV disabled or object not moving
+                try:
+                    # Transform velocity from image space to BEV space
+                    bev_velocity = bev_integrator.image_velocity_to_bev(
+                        actual_velocity,  # Velocity in image coordinates
+                        position           # Current position (needed for transformation)
+                    )
+                    
+                    # Convert BEV velocity to metric units (m/s)
+                    velocity_ms = bev_integrator.bev_velocity_to_metric(bev_velocity)
+                    
+                    # Convert m/s to km/h
+                    speed_kmh = bev_integrator.get_speed_kmh(velocity_ms)
+                    
+                    # Safety check: limit unrealistic speeds
+                    # Typical highway speeds: 0-150 km/h
+                    if speed_kmh > 200 or speed_kmh < 0:
+                        speed_kmh = 0.0  # Reset if unrealistic
+                        
+                except Exception as e:
+                    # If BEV transformation fails, fall back to zero
+                    speed_kmh = 0.0
+            else:  # BEV disabled or object not moving enough
                 speed_kmh = 0.0  # Zero speed
             
             # -------------------------------------------------------------
