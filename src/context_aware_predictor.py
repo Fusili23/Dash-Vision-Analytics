@@ -10,7 +10,7 @@ import cv2
 from typing import Dict, List, Tuple, Optional, NamedTuple
 from enum import Enum
 from dataclasses import dataclass
-from trajectory_predictor import KalmanFilterPredictor
+from .trajectory_predictor import KalmanFilterPredictor
 
 
 class TrafficLightState(Enum):
