@@ -10,18 +10,25 @@ Features:
 """
 
 # === IMPORT STATEMENTS (bringing in tools we need) ===
+# === IMPORT STATEMENTS (bringing in tools we need) ===
 import cv2  # Import OpenCV - computer vision library for images/video
 from ultralytics import YOLO  # Import YOLO object detection model
 import numpy as np  # Import numpy - math library for arrays/matrices
 from collections import defaultdict  # Import defaultdict - dictionary that creates default values
+import sys  # Import sys for path management
+from pathlib import Path  # Import Path for file path operations
 
-# Import our custom modules (files we created)
-from ego_motion import EgoMotionEstimator, RelativeVelocityTracker, BEVEgoMotionIntegrator
+# Add parent directory to path to import from src/
+# This allows: from src.module import Class
+sys.path.append(str(Path(__file__).parent.parent))  # Go up one level to project root
+
+# Import our custom modules (files we created in src/ folder)
+from src.ego_motion import EgoMotionEstimator, RelativeVelocityTracker, BEVEgoMotionIntegrator
 # - EgoMotionEstimator: calculates camera movement
 # - RelativeVelocityTracker: tracks object velocities with ego-motion compensation  
 # - BEVEgoMotionIntegrator: handles bird's-eye view transformations
 
-from context_aware_predictor import (  # Import from context_aware_predictor.py
+from src.context_aware_predictor import (  # Import from context_aware_predictor.py
     ContextAwarePredictor,  # Main prediction engine with context awareness
     EnvironmentalContext,  # Data structure for environment info
     TrafficLight,  # Data structure for traffic light info
@@ -29,8 +36,9 @@ from context_aware_predictor import (  # Import from context_aware_predictor.py
     UncertaintyVisualizer  # Tool for drawing prediction uncertainty
 )
 
-from semantic_zones import ZoneMaskGenerator, SemanticZone  # Tools for road/sidewalk zones
-from bev_transformer import BEVTransformer  # Tool for perspective transformation
+from src.semantic_zones import ZoneMaskGenerator, SemanticZone  # Tools for road/sidewalk zones
+from src.bev_transformer import BEVTransformer  # Tool for perspective transformation
+
 
 # =============================================================================
 # CONFIGURATION SECTION
