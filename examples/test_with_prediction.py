@@ -121,7 +121,7 @@ PREDICT_FRAMES = int(PREDICT_SECONDS * fps)  # Calculate number of frames
 # Feature toggles (True/False switches)
 ENABLE_EGO_MOTION = True  # Enable camera movement compensation
 ENABLE_CONTEXT_AWARE = True  # Enable traffic light & zone awareness
-ENABLE_BEV_CALCULATION = True  # Enable bird's-eye view calculations
+ENABLE_BEV_CALCULATION = False  # Disabled - uncalibrated and causes speed bugs
 SHOW_OPTICAL_FLOW = False  # Show optical flow visualization (set True to see)
 
 # Tracked classes (vehicles and humans only)
