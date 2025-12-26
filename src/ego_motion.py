@@ -27,41 +27,154 @@ class EgoMotionEstimator:  # Define class (blueprint for objects)
     
     # Constructor - runs when creating new object
     def __init__(  # Define initialization method
-        self,  # Reference to the object itself
-        history_size: int = 5,  # Number of frames to average (default 5)
-        flow_quality: str = 'medium'  # Quality setting (default 'medium')
+        self,  # Reference to the object itself (every method needs 'self')
+        history_size: int = 5,  # Parameter: How many past measurements to remember (default 5)
+        # history_size: int = 5 means:
+        # - Variable name: history_size
+        # - Type hint: int (integer, whole number like 1, 2, 3...)
+        # - Default value: 5 (if user doesn't specify, use 5)
+        # WHY history_size? Smooths out noise by averaging multiple frames
+        # Example: If one frame has bad optical flow, average of 5 frames is more stable
+        # Larger value = smoother but slower to respond to changes
+        # Smaller value = faster response but more jittery
+        
+        flow_quality: str = 'medium'  # Parameter: Quality setting for optical flow (default 'medium')
+        # flow_quality: str = 'medium' means:
+        # - Variable name: flow_quality
+        # - Type hint: str (string, text like 'low', 'medium', 'high')
+        # - Default value: 'medium' (balanced speed vs accuracy)
+        # WHY flow_quality? Trades computation time for accuracy
+        # 'low' = fast but less accurate (for real-time on slow computers)
+        # 'medium' = balanced (recommended for most cases)
+        # 'high' = slow but very accurate (for offline processing)
     ):
         """
         Args:
             history_size: Number of frames to average for stable estimation
             flow_quality: 'low', 'medium', 'high' - affects computational cost
         """
-        self.history_size = history_size  # Store as object attribute
-        # Create deque (queue) to store velocity history
+        # === STORE PARAMETERS AS OBJECT ATTRIBUTES ===
+        # 'self.variable_name' means "this object's variable"
+        # It lets us use these values later in other methods
+        
+        self.history_size = history_size  # Store history size for later use
+        # self.history_size means "this object's history_size variable"
+        # We can access it anywhere in this class using self.history_size
+        
+        # Create deque (pronounced "deck") - a special queue data structure
         self.ego_velocity_history = deque(maxlen=history_size)  # Auto-removes oldest when full
+        # deque is like a list but optimized for adding/removing from both ends
+        # maxlen=history_size means it automatically removes oldest item when full
+        # Example: If history_size=5 and we add 6th item, 1st item is deleted
+        # This gives us a "sliding window" of the last N measurements
+        
         self.prev_gray = None  # Will store previous frame (initially None)
+        # None means "no value yet" - like an empty box
+        # We need previous frame because optical flow compares 2 consecutive frames
         
-        # Optical flow parameters based on quality setting
-        # These control how the algorithm works
-        if flow_quality == 'low':  # Fast but less accurate
-            self.pyr_scale = 0.5  # Pyramid scale (how much to downsample each level)
-            self.levels = 2  # Number of pyramid levels (fewer = faster)
-            self.winsize = 10  # Window size for averaging (smaller = faster)
-            self.iterations = 2  # Iterations per level (fewer = faster)
-        elif flow_quality == 'medium':  # Balanced
-            self.pyr_scale = 0.5  # Same scale
-            self.levels = 3  # More levels = better accuracy
-            self.winsize = 15  # Moderate window
-            self.iterations = 3  # More iterations = better accuracy
-        else:  # flow_quality == 'high' - Slow but accurate
-            self.pyr_scale = 0.5  # Same scale
-            self.levels = 5  # Most levels
+        # === OPTICAL FLOW PARAMETERS ===
+        # These control how the Farneback optical flow algorithm works
+        # Think of optical flow as tracking where each pixel moved between frames
+        
+        # WHAT IS IMAGE PYRAMID?
+        # An image pyramid is multiple versions of the same image at different sizes:
+        # Level 0: Original size (e.g., 1920x1080)
+        # Level 1: Half size (e.g., 960x540) 
+        # Level 2: Quarter size (e.g., 480x270)
+        # Level 3: Eighth size (e.g., 240x135)
+        # ... and so on
+        
+        # WHY USE PYRAMIDS?
+        # - Large movements are hard to detect at full resolution
+        # - Small movements are hard to detect at low resolution
+        # - Pyramids let us detect BOTH: start with small image (large movements),
+        #   then refine with larger images (small movements)
+        # - It's like zooming in/out to see both the big picture and details
+        
+        # === CONFIGURE PARAMETERS BASED ON QUALITY SETTING ===
+        if flow_quality == 'low':  # Fast mode - for real-time on slow computers
+            # Low quality = fewer computations = faster but less accurate
+            
+            self.pyr_scale = 0.5  # Pyramid scale factor
+            # pyr_scale = 0.5 means each pyramid level is 50% (half) the size of previous level
+            # Example pyramid with pyr_scale=0.5:
+            #   Level 0: 1000x1000 pixels (original)
+            #   Level 1: 500x500 pixels (1000 * 0.5)
+            #   Level 2: 250x250 pixels (500 * 0.5)
+            #   Level 3: 125x125 pixels (250 * 0.5)
+            # Why 0.5? Good balance - smaller would be too aggressive, larger too slow
+            
+            self.levels = 2  # Number of pyramid levels to use
+            # levels = 2 means use only 2 pyramid levels (original + 1 downscaled)
+            # Fewer levels = faster computation but might miss large movements
+            # Example: Only levels 0 and 1 (original and half-size)
+            
+            self.winsize = 10  # Window size for averaging in pixels
+            # winsize = 10 means use 10x10 pixel neighborhood for each calculation
+            # Optical flow looks at a small window around each pixel to find movement
+            # Smaller window = faster but more sensitive to noise
+            # Think of it like: "How many neighbors should we ask when detecting motion?"
+            
+            self.iterations = 2  # Number of refinement iterations per level
+            # iterations = 2 means refine the flow calculation 2 times at each pyramid level
+            # More iterations = more accurate but slower
+            # Each iteration improves the flow estimate a bit more
+            # Like: "How many times should we polish our answer?"
+            
+        elif flow_quality == 'medium':  # Balanced mode - recommended for most cases
+            # Medium quality = balanced speed and accuracy
+            
+            self.pyr_scale = 0.5  # Same pyramid scale (0.5 is standard)
+            # Same as low - this parameter doesn't usually change
+            
+            self.levels = 3  # Use 3 pyramid levels
+            # More levels than 'low' = can detect larger movements
+            # Example: Original, half-size, quarter-size
+            # Detects movements up to ~(2^levels) pixels reliably
+            
+            self.winsize = 15  # Slightly larger window
+            # 15x15 pixel neighborhood = more context = more accurate
+            # Larger window = smoother flow but may blur sharp movements
+            
+            self.iterations = 3  # More refinement iterations
+            # 3 iterations = more polished results
+            # Each iteration makes the flow estimate more accurate
+            
+        else:  # flow_quality == 'high' - Slow but very accurate mode
+            # High quality = maximum accuracy, slowest computation
+            # Use when you need the best results and speed doesn't matter
+            
+            self.pyr_scale = 0.5  # Same scale factor
+            # Still 0.5 - this is pretty much standard for optical flow
+            
+            self.levels = 5  # Use 5 pyramid levels
+            # Most levels = can detect very large movements (up to ~32 pixels)
+            # Example: Original, 1/2, 1/4, 1/8, 1/16 size
+            # More levels = more computation but better for fast camera motion
+            
             self.winsize = 21  # Largest window
-            self.iterations = 5  # Most iterations
+            # 21x21 pixel neighborhood = maximum context
+            # Very smooth results but may be too blurry for fast-moving small objects
+            
+            self.iterations = 5  # Maximum refinement
+            # 5 iterations = highest quality estimate
+            # Each iteration polishes the result more
         
-        # Polynomial expansion parameters (for the algorithm)
-        self.poly_n = 5  # Size of pixel neighborhood
-        self.poly_sigma = 1.1  # Gaussian standard deviation
+        # === POLYNOMIAL EXPANSION PARAMETERS ===
+        # These are advanced mathematical parameters for the Farneback algorithm
+        # You rarely need to change these - they're algorithm-specific
+        
+        self.poly_n = 5  # Size of pixel neighborhood for polynomial expansion
+        # poly_n = 5 means fit a polynomial to a 5x5 neighborhood
+        # Polynomial expansion means representing image as smooth mathematical function
+        # Larger value = smoother but may miss small details
+        # 5 or 7 are typical values (must be odd number)
+        
+        self.poly_sigma = 1.1  # Gaussian standard deviation for polynomial expansion
+        # poly_sigma = 1.1 controls smoothing applied before polynomial fit
+        # Larger value = more smoothing = less noise but less detail
+        # 1.1 is a good default value
+        # Think of it like: "How much should we blur before fitting the polynomial?"
     
     # Main method - estimates camera movement
     def estimate_ego_motion(  # Method definition
